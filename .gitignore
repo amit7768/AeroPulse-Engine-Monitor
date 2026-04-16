@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# large data
+*.csv
+*.db
+*.sqlite
+*.jsonl
+*.parquet
+*.h5
+*.hd5
+*.pkl
