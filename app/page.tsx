@@ -15,9 +15,19 @@ import {
   Database,
   Gauge,
   Shield,
+  Thermometer,
   TrendingDown,
   Zap,
 } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 const STATS = [
   { label: "Engines Monitored", value: "2,847", unit: "active", color: "var(--cyan-glow)" },
@@ -66,7 +76,7 @@ const FEATURES = [
 ];
 
 // HUD orbit rings component
-function EngineHero() {
+function EngineHero({ data, loading }: { data: any; loading: boolean }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 80);
@@ -171,13 +181,13 @@ function EngineHero() {
         N1: 88.5%
       </div>
       <div className="absolute top-4 right-8 text-xs font-mono-aerospace text-[var(--cyan-dim)] opacity-70">
-        EGT: 645°C
+        T24: {loading ? "..." : `${data?.sensors?.T24}°R`}
       </div>
-      <div className="absolute bottom-8 left-8 text-xs font-mono-aerospace text-[var(--success)] opacity-90">
-        ● NOMINAL
+      <div className="absolute bottom-8 left-8 text-xs font-mono-aerospace text-[var(--success)] opacity-90" style={{ color: loading ? "var(--success)" : data?.status === "Critical" ? "var(--danger)" : data?.status === "Warning" ? "var(--warning)" : "var(--success)" }}>
+        ● {loading ? "LOADING" : (data?.status?.toUpperCase() || "NOMINAL")}
       </div>
       <div className="absolute bottom-8 right-6 text-xs font-mono-aerospace text-[var(--cyan-dim)] opacity-70">
-        RUL: 92
+        RUL: {loading ? "..." : data?.predictedRul}
       </div>
 
       {/* Scan line sweep */}
@@ -254,6 +264,55 @@ export default function HomePage() {
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
   const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -60]);
+
+  const [trends, setTrends] = useState<any[]>([]);
+  const [loadingTrends, setLoadingTrends] = useState(true);
+
+  const [heroData, setHeroData] = useState<any>(null);
+  const [loadingHero, setLoadingHero] = useState(true);
+
+  useEffect(() => {
+    async function fetchTrends() {
+      try {
+        const res = await fetch("/api/showcase/trends");
+        const json = await res.json();
+        if (json.trends) {
+          setTrends(json.trends);
+        }
+      } catch (err) {
+        console.error("Error fetching showcase trends:", err);
+      } finally {
+        setLoadingTrends(false);
+      }
+    }
+
+    async function fetchHeroData() {
+      try {
+        const res = await fetch("/api/chatbot/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ engineId: "ENG-4721-X" }), // First default engine
+        });
+        const data = await res.json();
+        setHeroData(data);
+      } catch (err) {
+        console.error("Error fetching hero data:", err);
+      } finally {
+        setLoadingHero(false);
+      }
+    }
+
+    fetchTrends();
+    fetchHeroData();
+  }, []);
+
+  const heroColor = loadingHero 
+    ? "var(--success)" 
+    : heroData?.status === "Critical" 
+    ? "var(--danger)" 
+    : heroData?.status === "Warning" 
+    ? "var(--warning)" 
+    : "var(--success)";
 
   return (
     <div className="min-h-screen bg-[var(--bg-dark)] bg-grid overflow-x-hidden">
@@ -372,10 +431,19 @@ export default function HomePage() {
                 className="panel p-3 text-xs font-mono-aerospace min-w-[140px] pointer-events-auto"
               >
                 <div className="text-[var(--text-muted)] mb-1 text-[10px] tracking-widest">RUL</div>
-                <div className="text-lg font-bold text-[var(--success)]">
-                  92 <span className="text-[var(--cyan-dim)] text-xs">cycles</span>
+                <div className="text-lg font-bold" style={{ color: heroColor }}>
+                  {loadingHero ? (
+                    <span className="opacity-50 animate-pulse text-sm">Loading...</span>
+                  ) : (
+                    <>
+                      {heroData?.predictedRul || "74.5"}{" "}
+                      <span className="text-[var(--cyan-dim)] text-xs">cycles</span>
+                    </>
+                  )}
                 </div>
-                <div className="text-[var(--success)] text-[10px] mt-1">● NOMINAL</div>
+                <div className="text-[10px] mt-1 font-bold" style={{ color: heroColor }}>
+                  ● {loadingHero ? "LOADING" : (heroData?.status?.toUpperCase() || "HEALTHY")}
+                </div>
               </motion.div>
 
               {/* VIBRATION Card */}
@@ -390,20 +458,30 @@ export default function HomePage() {
                 </div>
               </motion.div>
 
-              {/* EGT Card */}
+              {/* EGT / T24 Temp Card */}
               <motion.div
                 animate={{ y: [6, -6, 6] }}
                 transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
                 className="panel p-3 text-xs font-mono-aerospace min-w-[140px] pointer-events-auto"
               >
-                <div className="text-[var(--text-muted)] mb-1 text-[10px] tracking-widest">EGT</div>
+                <div className="text-[var(--text-muted)] mb-1 text-[10px] tracking-widest">T24 TEMP</div>
                 <div className="text-lg font-bold text-white">
-                  645 <span className="text-[var(--cyan-dim)] text-xs">°C</span>
+                  {loadingHero ? (
+                    <span className="opacity-50 animate-pulse text-sm">Loading...</span>
+                  ) : (
+                    <>
+                      {heroData?.sensors?.T24 || "616.4"}{" "}
+                      <span className="text-[var(--cyan-dim)] text-xs">°R</span>
+                    </>
+                  )}
                 </div>
                 <div className="risk-bar-track mt-2">
                   <div
-                    className="risk-bar-fill bg-[var(--success)]"
-                    style={{ width: "55%" }}
+                    className="risk-bar-fill"
+                    style={{ 
+                      width: loadingHero ? "0%" : `${Math.min(100, (((heroData?.sensors?.T24 || 600) - 590) / 60) * 100)}%`,
+                      background: heroColor
+                    }}
                   />
                 </div>
               </motion.div>
@@ -479,6 +557,143 @@ export default function HomePage() {
             </motion.div>
           ))}
         </div>
+      </section>
+
+      {/* ── TELEMETRY SHOWCASE ── */}
+      <section className="py-24 max-w-[1300px] mx-auto px-6 border-t border-[rgba(0,229,255,0.08)]">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-16"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1 mb-4 rounded-full border border-[rgba(0,229,255,0.2)] bg-[rgba(0,229,255,0.04)]">
+            <span className="text-[10px] font-mono-aerospace tracking-[0.2em] text-[var(--cyan-dim)]">
+              LIVE DATA DEGRADATION
+            </span>
+          </div>
+          <h2 className="text-4xl font-bold text-white mb-4">
+            NASA C-MAPSS <span className="gradient-text-cyan">Telemetry Showcase</span>
+          </h2>
+          <p className="text-[var(--text-muted)] max-w-2xl mx-auto">
+            Visualizing real-time degradation trends extracted from our LSTM predictions. Look closely at LPC Outlet Temperature (T24) rising and HPC Outlet Pressure (P30) declining across the 93 operational cycles.
+          </p>
+        </motion.div>
+
+        {loadingTrends ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="w-8 h-8 rounded-full border-2 border-[var(--cyan-glow)] border-t-transparent animate-spin mx-auto mb-3" />
+              <div className="text-xs font-mono-aerospace text-[var(--text-muted)]">LOADING SENSOR TELEMETRY TRENDS...</div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* T24 Chart Card */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="panel p-6 hud-frame"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Thermometer className="w-5 h-5 text-[#ff6644]" />
+                  <div>
+                    <h3 className="font-bold text-white text-base">LPC Outlet Temperature (T24)</h3>
+                    <p className="text-xs text-[var(--text-muted)]">Real degradation telemetry trend across cycles</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-mono-aerospace text-[var(--text-muted)]">Unit: </span>
+                  <span className="text-xs font-mono-aerospace text-[var(--cyan-glow)]">°R</span>
+                </div>
+              </div>
+              <div className="h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trends}>
+                    <defs>
+                      <linearGradient id="t24Grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ff6644" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#ff6644" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                    <XAxis dataKey="cycle" tick={{ fill: "var(--text-muted)", fontSize: 10 }} label={{ value: "Cycle", position: "insideBottom", offset: -2, fill: "var(--text-muted)", fontSize: 10 }} />
+                    <YAxis domain={[590, 650]} tick={{ fill: "var(--text-muted)", fontSize: 10 }} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const data = payload[0].payload;
+                        return (
+                          <div className="panel p-3 text-xs font-mono-aerospace border border-[rgba(255,102,68,0.3)]">
+                            <div className="text-white mb-1">Cycle {data.cycle}</div>
+                            <div className="text-[#ff6644]">Temp: {data.T24} °R</div>
+                            <div className="text-[var(--text-muted)] mt-1">RUL: {data.rul} cyc</div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Area type="monotone" dataKey="T24" stroke="#ff6644" strokeWidth={2} fill="url(#t24Grad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+
+            {/* P30 Chart Card */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="panel p-6 hud-frame"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-[var(--cyan-glow)]" />
+                  <div>
+                    <h3 className="font-bold text-white text-base">HPC Outlet Pressure (P30)</h3>
+                    <p className="text-xs text-[var(--text-muted)]">Real degradation telemetry trend across cycles</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-mono-aerospace text-[var(--text-muted)]">Unit: </span>
+                  <span className="text-xs font-mono-aerospace text-[var(--cyan-glow)]">psia</span>
+                </div>
+              </div>
+              <div className="h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trends}>
+                    <defs>
+                      <linearGradient id="p30Grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00e5ff" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#00e5ff" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                    <XAxis dataKey="cycle" tick={{ fill: "var(--text-muted)", fontSize: 10 }} label={{ value: "Cycle", position: "insideBottom", offset: -2, fill: "var(--text-muted)", fontSize: 10 }} />
+                    <YAxis domain={[535, 565]} tick={{ fill: "var(--text-muted)", fontSize: 10 }} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const data = payload[0].payload;
+                        return (
+                          <div className="panel p-3 text-xs font-mono-aerospace border border-[rgba(0,229,255,0.3)]">
+                            <div className="text-white mb-1">Cycle {data.cycle}</div>
+                            <div className="text-[var(--cyan-glow)]">Pressure: {data.P30} psia</div>
+                            <div className="text-[var(--text-muted)] mt-1">RUL: {data.rul} cyc</div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Area type="monotone" dataKey="P30" stroke="#00e5ff" strokeWidth={2} fill="url(#p30Grad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </section>
 
       {/* ── CTA BANNER ── */}

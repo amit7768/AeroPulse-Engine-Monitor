@@ -157,7 +157,7 @@ export default function JetEngine3D() {
         </Float>
 
         {/* Post-processing Bloom makes the HDR emissive parts glow intensely */}
-        <EffectComposer disableNormalPass>
+        <EffectComposer>
           <Bloom
             luminanceThreshold={1.5}
             mipmapBlur

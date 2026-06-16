@@ -22,6 +22,7 @@ type Message = {
   timestamp: Date;
   sources?: string[];
   confidence?: number;
+  status?: string;
 };
 
 const ENGINES = ["ENG-4721-X", "ENG-3310-B", "ENG-0897-C", "ENG-5521-D"];
@@ -75,6 +76,15 @@ function TypingIndicator() {
 
 function ChatMessage({ msg }: { msg: Message }) {
   const isUser = msg.role === "user";
+  const statusColor =
+    msg.status === "Critical"
+      ? "#ff4444"
+      : msg.status === "Warning"
+      ? "#ffaa00"
+      : msg.status === "Healthy"
+      ? "#00ff88"
+      : undefined;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -102,15 +112,18 @@ function ChatMessage({ msg }: { msg: Message }) {
           {isUser ? (
             <p className="text-sm text-white leading-relaxed">{msg.content}</p>
           ) : (
-            <div className="text-sm text-[var(--text-primary)] leading-relaxed prose-sm max-w-none
-              [&_strong]:text-[var(--cyan-glow)] [&_strong]:font-semibold
-              [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:space-y-1
-              [&_p]:mb-2 [&_p:last-child]:mb-0
-              [&_h1]:text-white [&_h1]:font-bold [&_h1]:text-base
-              [&_h2]:text-white [&_h2]:font-bold [&_h2]:text-sm
-              [&_h3]:text-white [&_h3]:font-semibold [&_h3]:text-sm
-              [&_code]:text-[var(--cyan-dim)] [&_code]:bg-[rgba(0,229,255,0.08)] [&_code]:px-1 [&_code]:rounded
-            ">
+            <div 
+              className="text-sm text-[var(--text-primary)] leading-relaxed prose-sm max-w-none
+                [&_strong]:text-[var(--cyan-glow)] [&_strong]:font-semibold
+                [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:space-y-1
+                [&_p]:mb-2 [&_p:last-child]:mb-0
+                [&_h1]:text-white [&_h1]:font-bold [&_h1]:text-base
+                [&_h2]:text-white [&_h2]:font-bold [&_h2]:text-sm
+                [&_h3]:text-white [&_h3]:font-semibold [&_h3]:text-sm
+                [&_code]:text-[var(--cyan-dim)] [&_code]:bg-[rgba(0,229,255,0.08)] [&_code]:px-1 [&_code]:rounded
+              "
+              style={statusColor ? { color: statusColor } : undefined}
+            >
               <ReactMarkdown>{msg.content}</ReactMarkdown>
             </div>
           )}
@@ -174,10 +187,10 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat-explain", {
+      const res = await fetch("/api/chatbot/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content, engineId }),
+        body: JSON.stringify({ engineId }),
       });
       const data = await res.json();
 
@@ -188,6 +201,7 @@ export default function ChatPage() {
         timestamp: new Date(),
         sources: data.sources,
         confidence: data.confidence,
+        status: data.status,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch {
